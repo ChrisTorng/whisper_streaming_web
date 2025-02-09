@@ -1,3 +1,18 @@
+# My experience
+
+```cmd
+pip install librosa soundfile
+pip install fastapi ffmpeg-python
+pip install faster-whisper
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+pip install uvicorn[standard]
+pip install diart
+python whisper_fastapi_online_server.py --host 0.0.0.0 --port 8000 --model tiny --lan zh --vac --vad
+# --diarization False
+```
+http://localhost:8000
+It hangs on 8 to 20 seconds.
+
 # Whisper Streaming with FastAPI and WebSocket Integration
 
 This project extends the [Whisper Streaming](https://github.com/ufal/whisper_streaming) implementation by incorporating few extras. The enhancements include:
