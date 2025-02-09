@@ -13,6 +13,11 @@ python whisper_fastapi_online_server.py --host 0.0.0.0 --port 8000 --model tiny 
 http://localhost:8000
 It hangs on 8 to 20 seconds.
 
+```cmd
+python whisper_noserver_test.py --audio_path "D:\Projects\GitHub\Cloned\whisper_streaming\audio\Dialog.wav" --model tiny --lan zh
+```
+
+
 # Whisper Streaming with FastAPI and WebSocket Integration
 
 This project extends the [Whisper Streaming](https://github.com/ufal/whisper_streaming) implementation by incorporating few extras. The enhancements include:

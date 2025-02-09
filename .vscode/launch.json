@@ -16,6 +16,18 @@
                 "--model", "tiny",
                 "--lan", "zh"
             ]
+        },
+        {
+            "name": "Python Debugger: whisper_noserver_test.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "whisper_noserver_test.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--audio_path", "D:\\Projects\\GitHub\\Cloned\\whisper_streaming\\audio\\Dialog.wav",
+                "--model", "tiny",
+                "--lan", "zh"
+            ]
         }
     ]
 }

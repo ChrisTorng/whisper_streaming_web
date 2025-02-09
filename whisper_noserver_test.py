@@ -97,8 +97,8 @@ if __name__ == "__main__":
         # - the next words: segment transcript
         if now is None:
             now = time.time() - start
-        if o[0] is not None:
-            log_string = f"{now*1000:1.0f}, {o[0]*1000:1.0f}-{o[1]*1000:1.0f} ({(now-o[1]):+1.0f}s): {o[2]}"
+        if o.start is not None:
+            log_string = f"{now*1000:1.0f}, {o.start*1000:1.0f}-{o.end*1000:1.0f} ({(now-o.end):+1.0f}s): {o.text}"
 
             logger.debug(
                 log_string
