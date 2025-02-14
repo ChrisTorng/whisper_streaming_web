@@ -4,6 +4,7 @@ import asyncio
 import numpy as np
 import ffmpeg
 from time import time
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -11,74 +12,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.whisper_streaming.whisper_online import backend_factory, online_factory, add_shared_args
 
-
-import logging
-import logging.config
-
-def setup_logging():
-    logging_config = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'standard': {
-                'format': '%(asctime)s %(levelname)s [%(name)s]: %(message)s',
-            },
-        },
-        'handlers': {
-            'console': {
-                'level': 'INFO',
-                'class': 'logging.StreamHandler',
-                'formatter': 'standard',
-            },
-        },
-        'root': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-        },
-        'loggers': {
-            'uvicorn': {
-                'handlers': ['console'],
-                'level': 'INFO',
-                'propagate': False,
-            },
-            'uvicorn.error': {
-                'level': 'INFO',
-            },
-            'uvicorn.access': {
-                'level': 'INFO',
-            },
-            'src.whisper_streaming.online_asr': {  # Add your specific module here
-                'handlers': ['console'],
-                'level': 'DEBUG',
-                'propagate': False,
-            },
-            'src.whisper_streaming.whisper_streaming': {  # Add your specific module here
-                'handlers': ['console'],
-                'level': 'DEBUG',
-                'propagate': False,
-            },
-        },
-    }
-
-    logging.config.dictConfig(logging_config)
-
-setup_logging()
-logger = logging.getLogger(__name__)
+import subprocess
+import math
 
 
-
-
-
-
-app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+##### LOAD ARGS #####
 
 parser = argparse.ArgumentParser(description="Whisper FastAPI Online Server")
 parser.add_argument(
@@ -108,28 +46,37 @@ parser.add_argument(
 add_shared_args(parser)
 args = parser.parse_args()
 
-asr, tokenizer = backend_factory(args)
-
-if args.diarization:
-    from src.diarization.diarization_online import DiartDiarization
-
-
-# Load demo HTML for the root endpoint
-with open("src/web/live_transcription.html", "r", encoding="utf-8") as f:
-    html = f.read()
-
-
-@app.get("/")
-async def get():
-    return HTMLResponse(html)
-
-
 SAMPLE_RATE = 16000
 CHANNELS = 1
 SAMPLES_PER_SEC = SAMPLE_RATE * int(args.min_chunk_size)
 BYTES_PER_SAMPLE = 2  # s16le = 2 bytes per sample
 BYTES_PER_SEC = SAMPLES_PER_SEC * BYTES_PER_SAMPLE
 
+if args.diarization:
+    from src.diarization.diarization_online import DiartDiarization
+
+
+##### LOAD APP #####
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global asr, tokenizer
+    asr, tokenizer = backend_factory(args)
+    yield
+
+app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Load demo HTML for the root endpoint
+with open("src/web/live_transcription.html", "r", encoding="utf-8") as f:
+    html = f.read()
 
 async def start_ffmpeg_decoder():
     """
@@ -150,6 +97,11 @@ async def start_ffmpeg_decoder():
     return process
 
 
+##### ENDPOINTS #####
+
+@app.get("/")
+async def get():
+    return HTMLResponse(html)
 
 @app.websocket("/asr")
 async def websocket_endpoint(websocket: WebSocket):
@@ -176,23 +128,17 @@ async def websocket_endpoint(websocket: WebSocket):
         
         while True:
             try:
-                elapsed_time = int(time() - beg)
+                elapsed_time = math.floor((time() - beg) * 10) / 10 # Round to 0.1 sec
+                ffmpeg_buffer_from_duration = max(int(32000 * elapsed_time), 4096)
                 beg = time()
                 chunk = await loop.run_in_executor(
-                    None, ffmpeg_process.stdout.read, 32000 * elapsed_time
+                    None, ffmpeg_process.stdout.read, ffmpeg_buffer_from_duration
                 )
-                if (
-                    not chunk
-                ):  # The first chunk will be almost empty, FFmpeg is still starting up
-                    chunk = await loop.run_in_executor(
-                        None, ffmpeg_process.stdout.read, 4096
-                    )
-                    if not chunk:  # FFmpeg might have closed
-                        print("FFmpeg stdout closed.")
-                        break
+                if not chunk:
+                    print("FFmpeg stdout closed.")
+                    break
 
                 pcm_buffer.extend(chunk)
-
                 if len(pcm_buffer) >= BYTES_PER_SEC:
                     # Convert int16 -> float32
                     pcm_array = (
@@ -212,12 +158,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         })
                     
                     full_transcription += transcription.text
-                    if args.vac:
-                        transcript = online.online.concatenate_tokens(online.online.transcript_buffer.buffer)
-                    else:
-                        transcript = online.concatenate_tokens(online.transcript_buffer.buffer)
-
-                    buffer = transcript.text  
+                    buffer = online.get_buffer()
+                  
                     if buffer in full_transcription: # With VAC, the buffer is not updated until the next chunk is processed
                         buffer = ""
                                         
@@ -237,7 +179,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             lines.append(
                                 {
                                     "speaker": ch["speaker"][-1],
-                                    "text": ch['text'],
+                                    "text": ch['text']
                                 }
                             )
                         else:
