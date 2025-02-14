@@ -7,7 +7,8 @@ pip install faster-whisper
 pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 pip install uvicorn[standard]
 pip install diart
-python whisper_fastapi_online_server.py --host 0.0.0.0 --port 8000 --model tiny --lan zh --vac --vad
+python whisper_fastapi_online_server.py --host 0.0.0.0 --port 8000 --model tiny --lan zh
+--vac --vad
 # --diarization False
 ```
 http://localhost:8000
