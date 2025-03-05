@@ -47,6 +47,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--confidence-validation",
+    type=bool,
+    default=True,
+    help="Accelerates validation of tokens using confidence scores. Transcription will be faster but punctuation might be less accurate.",
+)
+
+parser.add_argument(
     "--diarization",
     type=bool,
     default=False,
@@ -120,8 +127,7 @@ class SharedState:
                 remaining_time_transcription = max(0, round(current_time - self.beg_loop - self.end_buffer, 2))
                 
             # Calculate remaining time for diarization
-            if self.end_attributed_speaker > 0:
-                remaining_time_diarization = max(0, round(max(self.end_buffer, self.tokens[-1].end if self.tokens else 0) - self.end_attributed_speaker, 2))
+            remaining_time_diarization = max(0, round(max(self.end_buffer, self.tokens[-1].end if self.tokens else 0) - self.end_attributed_speaker, 2))
                 
             return {
                 "tokens": self.tokens.copy(),
@@ -421,7 +427,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         loop.run_in_executor(
                             None, ffmpeg_process.stdout.read, ffmpeg_buffer_from_duration
                         ),
-                        timeout=5.0
+                        timeout=15.0
                     )
                     logger.info(f"wait over for ffmpeg stdout read, chunk length: {len(chunk)}")
                 except asyncio.TimeoutError:
